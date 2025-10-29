@@ -1,7 +1,7 @@
 streamlit
 streamlit-ketcher
 requests
-py3dmol
+py3Dmol
 psycopg2
 PIL
 stmol
