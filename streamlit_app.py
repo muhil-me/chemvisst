@@ -1,4 +1,4 @@
-from streamlit_searchbox import st_searchbox
+import streamlit as st
 import py3Dmol
 from stmol import showmol
 from streamlit_ketcher import st_ketcher
@@ -10,7 +10,6 @@ from datetime import datetime
 import time
 from PIL import Image
 from io import BytesIO
-import base64
 
 # Page configuration
 st.set_page_config(
@@ -219,33 +218,6 @@ def init_db():
         except Exception as e:
             st.error(f"Database initialization error: {e}")
 
-# Search PubChem for molecules
-def search_pubchem(query):
-    if not query or len(query) < 2:
-        return []
-    
-    try:
-        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{query}/cids/JSON?list_return=listkey"
-        response = requests.get(url, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'IdentifierList' in data:
-                cids = data['IdentifierList']['CID'][:10]
-                results = []
-                for cid in cids:
-                    prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/Title,MolecularFormula/JSON"
-                    prop_response = requests.get(prop_url, timeout=5)
-                    if prop_response.status_code == 200:
-                        prop_data = prop_response.json()
-                        if 'PropertyTable' in prop_data and 'Properties' in prop_data['PropertyTable']:
-                            props = prop_data['PropertyTable']['Properties'][0]
-                            results.append(props['Title'])
-                return results
-    except:
-        pass
-    return []
-
 # Get molecule images from PubChem
 @st.cache_data(ttl=3600)
 def get_molecule_images(cid):
@@ -384,23 +356,39 @@ def main():
     tab1, tab2 = st.tabs(["🔍 Search Molecules", "✏️ Draw Molecule"])
     
     with tab1:
-        # Search box with autocomplete
+        # Simple text input for search
         st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
-        selected_molecule = st_searchbox(
-            search_pubchem,
-            key="molecule_search",
-            placeholder="🔍 Search for a molecule (e.g., aspirin, caffeine, glucose)...",
-            clear_on_submit=False
+        search_query = st.text_input(
+            "🔍 Search for a molecule",
+            placeholder="Enter molecule name (e.g., aspirin, caffeine, glucose)...",
+            help="Type the name of any molecule to search PubChem"
         )
+        
+        # Popular molecules quick access
+        st.markdown("**Quick Access:**")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if st.button("💊 Aspirin"):
+                search_query = "aspirin"
+        with col2:
+            if st.button("☕ Caffeine"):
+                search_query = "caffeine"
+        with col3:
+            if st.button("🍬 Glucose"):
+                search_query = "glucose"
+        with col4:
+            if st.button("💧 Water"):
+                search_query = "water"
+        
         st.markdown('</div>', unsafe_allow_html=True)
         
-        if selected_molecule:
+        if search_query:
             with st.spinner("Loading molecular structure..."):
                 time.sleep(0.5)
-                data = get_molecule_data(selected_molecule)
+                data = get_molecule_data(search_query)
                 
                 if data:
-                    save_to_db(selected_molecule, data)
+                    save_to_db(search_query, data)
                     
                     # Create two columns for layout
                     col1, col2 = st.columns([2, 1])
@@ -411,7 +399,7 @@ def main():
                         
                         with viz_tab1:
                             st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
-                            st.subheader(f"2D Structure: {selected_molecule}")
+                            st.subheader(f"2D Structure: {search_query}")
                             img_2d, _ = get_molecule_images(data['cid'])
                             if img_2d:
                                 st.image(img_2d, use_container_width=True)
@@ -422,14 +410,14 @@ def main():
                                 st.download_button(
                                     label="📥 Download 2D Structure",
                                     data=buf.getvalue(),
-                                    file_name=f"{selected_molecule}_2D.png",
+                                    file_name=f"{search_query}_2D.png",
                                     mime="image/png"
                                 )
                             st.markdown('</div>', unsafe_allow_html=True)
                         
                         with viz_tab2:
                             st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
-                            st.subheader(f"3D Picture: {selected_molecule}")
+                            st.subheader(f"3D Picture: {search_query}")
                             _, img_3d = get_molecule_images(data['cid'])
                             if img_3d:
                                 st.image(img_3d, use_container_width=True)
@@ -440,14 +428,14 @@ def main():
                                 st.download_button(
                                     label="📥 Download 3D Picture",
                                     data=buf.getvalue(),
-                                    file_name=f"{selected_molecule}_3D.png",
+                                    file_name=f"{search_query}_3D.png",
                                     mime="image/png"
                                 )
                             st.markdown('</div>', unsafe_allow_html=True)
                         
                         with viz_tab3:
                             st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
-                            st.subheader(f"Interactive 3D: {selected_molecule}")
+                            st.subheader(f"Interactive 3D: {search_query}")
                             view = visualize_molecule(data['sdf'], style)
                             showmol(view, height=600, width=800)
                             
@@ -455,7 +443,7 @@ def main():
                             st.download_button(
                                 label="📥 Download SDF File",
                                 data=data['sdf'],
-                                file_name=f"{selected_molecule}.sdf",
+                                file_name=f"{search_query}.sdf",
                                 mime="chemical/x-mdl-sdfile"
                             )
                             st.markdown('</div>', unsafe_allow_html=True)
@@ -476,13 +464,15 @@ def main():
                             st.download_button(
                                 label="📋 Copy SMILES",
                                 data=data['smiles'],
-                                file_name=f"{selected_molecule}_smiles.txt",
+                                file_name=f"{search_query}_smiles.txt",
                                 mime="text/plain"
                             )
                         
                         st.markdown(f"[🔗 View on PubChem](https://pubchem.ncbi.nlm.nih.gov/compound/{data['cid']})")
                         
                         st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    st.error(f"Could not find molecule: {search_query}")
     
     with tab2:
         st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
@@ -514,4 +504,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
