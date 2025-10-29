@@ -1,6 +1,7 @@
 streamlit
 streamlit-ketcher
 py3Dmol
+ipython_genutils
 stmol
 pubchempy
 rdkit
