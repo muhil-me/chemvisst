@@ -1,5 +1,4 @@
 streamlit
-streamlit-searchbox
 streamlit-ketcher
 requests
 py3dmol
