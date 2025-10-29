@@ -513,5 +513,5 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    main()d inspiration, head over to [docs.streamlit.io](https://docs.streamlit.io/)."
+    main()
 )
