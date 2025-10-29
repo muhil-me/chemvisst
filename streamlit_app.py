@@ -1,7 +1,7 @@
-from streamlit_searchbox import st_searchbox
+from streamlit-searchbox import st_searchbox
 import py3Dmol
 from stmol import showmol
-from streamlit_ketcher import st_ketcher
+from streamlit-ketcher import st_ketcher
 import requests
 import psycopg2
 from psycopg2.extras import RealDictCursor
