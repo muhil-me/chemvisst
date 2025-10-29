@@ -1,6 +1,6 @@
 streamlit
-streamlit_searchbox
-streamlit_ketcher
+streamlit-searchbox
+streamlit-ketcher
 requests
 py3dmol
 psycopg2
