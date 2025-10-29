@@ -3,6 +3,8 @@ import py3Dmol
 from stmol import showmol
 from streamlit_ketcher import st_ketcher
 import pubchempy as pcp
+from rdkit import Chem
+from rdkit.Chem import Descriptors, AllChem
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
@@ -12,15 +14,6 @@ from PIL import Image
 from io import BytesIO
 import requests
 import pandas as pd
-
-# Try to import RDKit, but make it optional
-RDKIT_AVAILABLE = False
-try:
-    from rdkit import Chem
-    from rdkit.Chem import Descriptors, AllChem
-    RDKIT_AVAILABLE = True
-except ImportError:
-    st.warning("⚠️ RDKit not available - some features will be limited")
 
 # Page configuration
 st.set_page_config(
@@ -313,9 +306,8 @@ def get_molecule_data(name):
         return None
 
 # Get RDKit molecule from SMILES
+@st.cache_data
 def get_rdkit_mol(smiles):
-    if not RDKIT_AVAILABLE:
-        return None
     try:
         mol = Chem.MolFromSmiles(smiles)
         if mol:
@@ -326,7 +318,7 @@ def get_rdkit_mol(smiles):
 
 # Calculate molecular descriptors using RDKit
 def calculate_descriptors(mol):
-    if not mol or not RDKIT_AVAILABLE:
+    if not mol:
         return {}
     
     try:
@@ -433,7 +425,7 @@ def main():
     # Header with animation
     st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
     st.title("🧬 Advanced Molecular Structure Visualizer")
-    st.markdown("*Powered by PubChemPy and Py3Dmol for comprehensive molecular analysis*")
+    st.markdown("*Powered by PubChemPy, RDKit, and Py3Dmol for comprehensive molecular analysis*")
     st.markdown('</div>', unsafe_allow_html=True)
     
     # Sidebar
@@ -509,7 +501,7 @@ def main():
                     save_to_db(search_query, data)
                     
                     # Get RDKit molecule for additional analysis
-                    rdkit_mol = get_rdkit_mol(data['smiles']) if data['smiles'] != 'N/A' and RDKIT_AVAILABLE else None
+                    rdkit_mol = get_rdkit_mol(data['smiles']) if data['smiles'] != 'N/A' else None
                     
                     # Create layout
                     col1, col2 = st.columns([2, 1])
@@ -583,32 +575,36 @@ def main():
                         
                         st.markdown('</div>', unsafe_allow_html=True)
                         
-                        # Display PubChem properties
+                        # Display molecular descriptors
                         st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
                         st.subheader("🔬 Molecular Descriptors")
                         
-                        col_a, col_b = st.columns(2)
-                        with col_a:
-                            st.metric("XLogP", data.get('xlogp', 'N/A'))
-                            st.metric("H Donors", data.get('h_bond_donor', 'N/A'))
-                            st.metric("Complexity", data.get('complexity', 'N/A'))
-                        
-                        with col_b:
-                            st.metric("TPSA", f"{data.get('tpsa', 'N/A')}" + (" Ų" if data.get('tpsa') != 'N/A' else ""))
-                            st.metric("H Acceptors", data.get('h_bond_acceptor', 'N/A'))
-                            st.metric("Rotatable Bonds", data.get('rotatable_bonds', 'N/A'))
-                        
-                        # RDKit descriptors if available
+                        # Use RDKit descriptors if available
                         if rdkit_mol:
-                            st.divider()
-                            st.caption("✨ Enhanced with RDKit calculations")
                             rdkit_descriptors = calculate_descriptors(rdkit_mol)
-                            if rdkit_descriptors:
-                                col_c, col_d = st.columns(2)
-                                with col_c:
-                                    st.metric("Aromatic Rings", rdkit_descriptors.get('Num Aromatic Rings', 'N/A'))
-                                with col_d:
-                                    st.metric("Aliphatic Rings", rdkit_descriptors.get('Num Aliphatic Rings', 'N/A'))
+                            
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.metric("LogP", rdkit_descriptors.get('LogP', 'N/A'))
+                                st.metric("H Donors", rdkit_descriptors.get('Num H Donors', 'N/A'))
+                                st.metric("Aromatic Rings", rdkit_descriptors.get('Num Aromatic Rings', 'N/A'))
+                            
+                            with col_b:
+                                st.metric("TPSA", f"{rdkit_descriptors.get('TPSA', 'N/A')} Ų")
+                                st.metric("H Acceptors", rdkit_descriptors.get('Num H Acceptors', 'N/A'))
+                                st.metric("Rotatable Bonds", rdkit_descriptors.get('Num Rotatable Bonds', 'N/A'))
+                        else:
+                            # Fallback to PubChem properties
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.metric("XLogP", data.get('xlogp', 'N/A'))
+                                st.metric("H Donors", data.get('h_bond_donor', 'N/A'))
+                                st.metric("Complexity", data.get('complexity', 'N/A'))
+                            
+                            with col_b:
+                                st.metric("TPSA", f"{data.get('tpsa', 'N/A')}" + (" Ų" if data.get('tpsa') != 'N/A' else ""))
+                                st.metric("H Acceptors", data.get('h_bond_acceptor', 'N/A'))
+                                st.metric("Rotatable Bonds", data.get('rotatable_bonds', 'N/A'))
                         
                         st.markdown('</div>', unsafe_allow_html=True)
                         
@@ -652,39 +648,38 @@ def main():
         if molecule_data:
             st.success("✅ Molecule drawn successfully!")
             
-            # Try to convert to RDKit mol if available
-            if RDKIT_AVAILABLE:
-                try:
-                    mol = Chem.MolFromMolBlock(molecule_data)
-                    if mol:
-                        smiles = Chem.MolToSmiles(mol)
+            # Try to convert to RDKit mol
+            try:
+                mol = Chem.MolFromMolBlock(molecule_data)
+                if mol:
+                    smiles = Chem.MolToSmiles(mol)
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
+                        st.subheader("📊 Calculated Properties")
+                        descriptors = calculate_descriptors(mol)
                         
-                        col1, col2 = st.columns(2)
+                        for key, value in descriptors.items():
+                            st.metric(key, value)
                         
-                        with col1:
-                            st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
-                            st.subheader("📊 Calculated Properties")
-                            descriptors = calculate_descriptors(mol)
-                            
-                            for key, value in descriptors.items():
-                                st.metric(key, value)
-                            
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        with col2:
-                            st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
-                            st.subheader("🧪 Generated SMILES")
-                            st.code(smiles, language=None)
-                            st.download_button(
-                                label="📋 Download SMILES",
-                                data=smiles,
-                                file_name="custom_molecule_smiles.txt",
-                                mime="text/plain",
-                                key="custom_smiles"
-                            )
-                            st.markdown('</div>', unsafe_allow_html=True)
-                except:
-                    st.warning("Could not analyze the drawn structure with RDKit")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
+                        st.subheader("🧪 Generated SMILES")
+                        st.code(smiles, language=None)
+                        st.download_button(
+                            label="📋 Download SMILES",
+                            data=smiles,
+                            file_name="custom_molecule_smiles.txt",
+                            mime="text/plain",
+                            key="custom_smiles"
+                        )
+                        st.markdown('</div>', unsafe_allow_html=True)
+            except:
+                st.warning("Could not analyze the drawn structure")
             
             st.markdown('<div class="molecule-card">', unsafe_allow_html=True)
             with st.expander("📄 Molecule Data (MOL format)", expanded=False):
@@ -697,7 +692,7 @@ def main():
                 )
             st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.info("💡 **Tip:** Draw a molecule above to see its properties" + (" and generate SMILES notation!" if RDKIT_AVAILABLE else "!"))
+            st.info("💡 **Tip:** Draw a molecule above to see its properties and generate SMILES notation!")
         
         st.markdown('</div>', unsafe_allow_html=True)
 
