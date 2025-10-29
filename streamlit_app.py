@@ -1,4 +1,4 @@
-from streamlit-searchbox import st-searchbox
+from streamlit-searchbox import st_searchbox
 import py3Dmol
 from stmol import showmol
 from streamlit-ketcher import st-ketcher
