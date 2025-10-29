@@ -1,1 +1,8 @@
 streamlit
+streamlit_searchbox
+streamlit_ketcher
+requests
+py3dmol
+psycopg2
+PIL
+stmol
